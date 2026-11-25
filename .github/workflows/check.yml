@@ -125,5 +125,5 @@ jobs:
 
       - name: Show site URL
         run: |
-          echo "订阅地址：https://${{ Japic }}.github.io/${{ gate }}/nodes.txt"
-          echo "仪表盘：  https://${{ Japic }}.github.io/${{ gate }}/"
+          echo "订阅地址：https://${{Japic}}.github.io/${{gate}}/nodes.txt"
+          echo "仪表盘：  https://${{Japic}}.github.io/${{gate}}/"
