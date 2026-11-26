@@ -219,10 +219,13 @@
         document.getElementById('stats').innerHTML = items.map(function (it) {
           return statCard(it[0], it[1]);
         }).join('');
+        var workerText = (d.worker_host && d.worker_host !== 'hidden' && d.worker_host !== '***')
+          ? '｜Worker：' + d.worker_host
+          : '';
         document.getElementById('meta').textContent =
           '最后更新：' + (d.generated_at || '未知') +
           '｜数据源：' + (d.source || '未知') +
-          '｜Worker：' + (d.worker_host || '未知');
+          workerText;
         document.getElementById('sub-url').textContent =
           location.origin + location.pathname.replace(/[^/]*$/, '') + 'nodes.txt';
       }
