@@ -978,7 +978,8 @@ def main() -> None:
             "本次不发布（保留上一次产物）；确认无误可调低 MIN_SUCCESS_RATIO",
         )
 
-    worker_host = urlsplit(cfg.worker_base).netloc or "unknown"
+    hide_worker = os.environ.get("HIDE_WORKER_HOST", "").strip().lower() in ("1", "true", "yes")
+    worker_host = "hidden" if hide_worker else (urlsplit(cfg.worker_base).netloc or "unknown")
     data = build_outputs(
         results=results,
         raw_count=raw_count,
