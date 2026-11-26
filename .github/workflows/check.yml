@@ -1,13 +1,9 @@
 name: VPN Gate Node Check
 
-# 模板仓库默认不配置定时任务：需要自动更新时，把下面的注释替换成你自己的 cron。
-# 注意：GitHub 调度最小间隔约 5 分钟，但通常会延迟几分钟；仓库连续 60 天无提交会让定时任务自动停用。
-#
-# on:
-#   schedule:
-#     - cron: '*/30 * * * *'
-
+# 每 30 分钟自动检测更新（注意：GitHub 调度最小间隔约 5 分钟，通常会延迟几分钟；仓库连续 60 天无提交会让定时任务自动停用）
 on:
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       max_nodes:
@@ -125,5 +121,5 @@ jobs:
 
       - name: Show site URL
         run: |
-          echo "订阅地址：https://${{Japic}}.github.io/${{gate}}/nodes.txt"
-          echo "仪表盘：  https://${{Japic}}.github.io/${{gate}}/"
+          echo "订阅地址：https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/nodes.txt"
+          echo "仪表盘：  https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
