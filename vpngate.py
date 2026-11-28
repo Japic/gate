@@ -897,7 +897,7 @@ def build_nodes_text(data: dict[str, Any], edge_hosts: list[str], cfg: Config) -
             n
             for n in nodes
             if n.get("residential") == "residential"
-            and not ((n.get("exit") or {}).get("is_datacenter") is True)
+            and (n.get("exit") or {}).get("is_datacenter") is not True
         ]
         others = [n for n in nodes if n.get("residential") != "residential"]
         chosen = residential[: cfg.max_residential_per_country] + others[: cfg.max_datacenter_per_country]
