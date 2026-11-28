@@ -66,6 +66,12 @@ jobs:
           MAX_CHECK_NODES: ${{ github.event.inputs.max_nodes || '0' }}
           MIN_SUCCESS_RATIO: '0'
           HIDE_WORKER_HOST: '1'
+          EDGE_HOSTS: 'cf.nyanya.moe:443,cdn.204910.best:443,cdn.ctn32.us.kg:443,www.mfyx.cn:443,saas.sin.fan:443'
+          OPTIMAL_API: 'https://cf.090227.xyz/ct?ips=8&port=443'
+          VERIFY_EDGE_HOSTS: '1'
+          INCLUDE_COUNTRIES: 'JP,KR'
+          MAX_RESIDENTIAL_PER_COUNTRY: '30'
+          MAX_DATACENTER_PER_COUNTRY: '0'
         run: python vpngate.py
 
       - name: Ensure GitHub Pages is enabled
