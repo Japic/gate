@@ -21,6 +21,7 @@ import io
 import json
 import os
 import re
+import socket
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -746,11 +747,46 @@ def fetch_optimal_endpoints(cfg: Config, session: requests.Session) -> list[str]
     return endpoints
 
 
+def _probe_edge_endpoint(endpoint: str, timeout: float = 2.5) -> bool:
+    host_part, _, port_str = endpoint.rpartition(":")
+    if not host_part or not port_str.isdigit():
+        return False
+    host = host_part.strip("[]")
+    port = int(port_str)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def verify_edge_hosts(endpoints: list[str], timeout: float = 2.5) -> list[str]:
+    if not endpoints:
+        return []
+    healthy_set: set[str] = set()
+    with ThreadPoolExecutor(max_workers=min(16, len(endpoints))) as pool:
+        futures = {pool.submit(_probe_edge_endpoint, ep, timeout): ep for ep in endpoints}
+        for future in as_completed(futures):
+            ep = futures[future]
+            try:
+                if future.result():
+                    healthy_set.add(ep)
+            except Exception:  # noqa: BLE001
+                pass
+    healthy = [ep for ep in endpoints if ep in healthy_set]
+    dropped = len(endpoints) - len(healthy)
+    if healthy:
+        log("EDGE POOL", f"入口健康检查: {len(endpoints)} 个中 {len(healthy)} 个可用，剔除 {dropped} 个失效入口")
+        return healthy
+    log("EDGE POOL", "入口健康检查全部超时，保留原入口池兜底")
+    return endpoints
+
+
 def get_combined_edge_hosts(cfg: Config, session: requests.Session) -> list[str]:
     api_endpoints = fetch_optimal_endpoints(cfg, session)
     combined: list[str] = []
     seen: set[str] = set()
-    for endpoint in list(cfg.edge_hosts) + api_endpoints:
+    for endpoint in api_endpoints + list(cfg.edge_hosts):
         if endpoint and endpoint not in seen:
             seen.add(endpoint)
             combined.append(endpoint)
@@ -758,8 +794,10 @@ def get_combined_edge_hosts(cfg: Config, session: requests.Session) -> list[str]
         combined = [h for h in (normalize_endpoint(x) for x in DEFAULT_EDGE_HOSTS) if h]
     log(
         "EDGE POOL",
-        f"入口地址池: 静态/配置 {len(cfg.edge_hosts)} 个, API {len(api_endpoints)} 个, 合并 {len(combined)} 个",
+        f"入口地址池: API {len(api_endpoints)} 个, 静态/配置 {len(cfg.edge_hosts)} 个, 合并 {len(combined)} 个",
     )
+    if os.environ.get("VERIFY_EDGE_HOSTS", "").strip().lower() in ("1", "true", "yes"):
+        combined = verify_edge_hosts(combined)
     return combined
 
 
@@ -828,20 +866,39 @@ def build_outputs(
 def build_nodes_text(data: dict[str, Any], edge_hosts: list[str], cfg: Config) -> str:
     if not edge_hosts:
         raise ConfigError("优选入口池为空，无法生成 nodes.txt")
+    include_raw = os.environ.get("INCLUDE_COUNTRIES", "").strip()
+    include_list = [c.strip().upper() for c in include_raw.split(",") if c.strip()]
+    include_rank = {code: idx for idx, code in enumerate(include_list)}
+
     lines: list[str] = []
     seen_links: set[str] = set()
     index = 0
-    ordered = sorted(
-        data["countries"].items(),
-        key=lambda kv: (-int(kv[1].get("count") or 0), str(kv[1].get("code") or kv[0])),
-    )
+    items = list(data["countries"].items())
+    if include_rank:
+        items = [(code, group) for code, group in items if code.upper() in include_rank]
+        ordered = sorted(items, key=lambda kv: include_rank[kv[0].upper()])
+    else:
+        ordered = sorted(
+            items,
+            key=lambda kv: (-int(kv[1].get("count") or 0), str(kv[1].get("code") or kv[0])),
+        )
     for code, group in ordered:
         name = COUNTRY_ZH.get(code) or group.get("name") or code
         nodes = sorted(
             group["nodes"],
-            key=lambda n: (n.get("residential") != "residential", n.get("latency_ms") is None, n.get("latency_ms") or 0),
+            key=lambda n: (
+                n.get("residential") != "residential",
+                n.get("latency_ms") is None,
+                n.get("latency_ms") or 0,
+                -(n.get("score") or 0),
+            ),
         )
-        residential = [n for n in nodes if n.get("residential") == "residential"]
+        residential = [
+            n
+            for n in nodes
+            if n.get("residential") == "residential"
+            and not ((n.get("exit") or {}).get("is_datacenter") is True)
+        ]
         others = [n for n in nodes if n.get("residential") != "residential"]
         chosen = residential[: cfg.max_residential_per_country] + others[: cfg.max_datacenter_per_country]
         counters = {"residential": 0, "datacenter": 0, "unknown": 0}
